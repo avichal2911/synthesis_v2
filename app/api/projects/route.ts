@@ -1,58 +1,75 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// ✅ Safe runtime initialization
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey);
 }
 
-export async function GET(request: NextRequest) {
+// Example: GET projects
+export async function GET() {
   try {
-    // Get auth token from request header
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*');
+
+    if (error) throw error;
+
+    return NextResponse.json({ projects: data });
+
+  } catch (error) {
+    console.error('Projects API error:', error);
+
+    return NextResponse.json(
+      { error: 'Failed to fetch projects' },
+      { status: 500 }
+    );
+  }
+}
+
+// Example: CREATE project
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = getSupabaseClient();
+
+    const body = await request.json();
+    const { name, userId } = body;
+
+    if (!name || !userId) {
       return NextResponse.json(
-        { error: 'Missing authorization header' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Missing required fields' },
+        { status: 400 }
       );
     }
 
     const { data, error } = await supabase
       .from('projects')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .insert([
+        {
+          name,
+          user_id: userId,
+        },
+      ])
+      .select();
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    return NextResponse.json({ project: data?.[0] });
+
   } catch (error) {
-    console.error('Projects API error:', error);
+    console.error('Create project error:', error);
+
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
+      { error: 'Failed to create project' },
       { status: 500 }
     );
   }
