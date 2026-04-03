@@ -1,3 +1,6 @@
+-- Enable pgvector extension for embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Create projects table
 CREATE TABLE IF NOT EXISTS projects (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
